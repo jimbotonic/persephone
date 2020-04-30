@@ -1,11 +1,27 @@
-using Pkg
-Pkg.activate(normpath(joinpath(@__DIR__, "..")))
+#
+# Persephone: Epidemics Spread in Hierarchical Network Models
+# Copyright (C) 2016-2020  Jimmy Dubuisson <jimmy.dubuisson@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
 
-include("../src/util.jl")
-include("../src/io.jl")
-include("../src/graph.jl")
 
-using GraphPlot, Compose, Cairo, Fontconfig
+#using Pkg
+#Pkg.activate(normpath(joinpath(@__DIR__, "..")))
+
+using LightGraphs, GraphPlot, Compose, Cairo, Fontconfig
+
+using Adjacently.util
+using Adjacently.io
+using Adjacently.graph
 
 function load_dataset(input_path::AbstractString,output_filename::AbstractString)
 	g = SimpleGraph{UInt32}()

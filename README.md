@@ -4,5 +4,9 @@ Epidemic Spread in Hierarchical Network Models
 
 ### Installation
 
-* clone Adjacency.jl from https://github.com/jimbotonic/Adjacently.jl
-* copy 'copenhagen' subfolder of the current repository to Adjacency.jl folder
+Adjacently package https://github.com/jimbotonic/Adjacently.jl
+
+* Add julia packages
+
+pkg> add https://github.com/jimbotonic/Adjacently.jl.git
+pkg> add LightGraphs, Pandas, Plots, GraphPlot, Compose, Cairo, Fontconfig, Measures, Printf, Colors, GR
