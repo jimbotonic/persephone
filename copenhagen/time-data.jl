@@ -150,6 +150,22 @@ function spread(g::AbstractGraph{T},time::Int,vstats::Dict{T,VState},stat::Stat;
 	end
 end
 
+function get_bin_edges(::Type{T}, es::DataFrame, time::Int) where {T<:Unsigned}
+    ess = es[es[:time] < (time+1)*300][es[:time] >= time*300]
+    ea = Array(ess)
+    return convert(Array{T,2}, ea[1:end .!= 3, 1:end .!= 3])
+end
+
+function get_temporal_graph(::Type{T}, nv::Int, oni::Dict{T,T}, edges::Array{T,2}) where {T<:Unsigned}
+    g = SimpleGraph{UInt32}()
+    add_vertices!(g,nv)
+    add_graph_edges(g,oni,edges)
+    #@info "# vs", convert(Int,nv(g))
+    #@info "# es", convert(Int,ne(g))
+    #@info "----"
+    return g
+end
+
 ##########
 # simulation variables
 ##########
@@ -179,7 +195,7 @@ VCOLOR = [colorant"blue" colorant"orange" colorant"red" colorant"grey"]
 # save anim
 SAVE_ANIM = false
 
-N_BINS = 4000
+N_BINS = 8000
 
 ##########
 # initializations
@@ -211,6 +227,7 @@ val_pr_max, ind_pr_max = findmax(pr)
 # infect highest PR node
 #vstats[convert(UInt32,ind_pr_max)].status = I::Status
 # s2e(stat)
+#e2i(stat)
 
 # infect 10 nodes
 for j in 1:10
@@ -230,18 +247,16 @@ add_vertices!(g_base,NV)
 @info("loading bt-detected-internal")
 es = Pandas.read_csv("./data/bt-detected-internal.csv")
 
-if SAVE_ANIM
-    anim = Animation()
-end
+#if SAVE_ANIM
+#    anim = Animation()
+#end
 
 ## load edge time bins
 #ebins = Dict{Int,Array{UInt32,2}}()
 #
 #@info("loading time bin edges")
 #for i in 0:(N_BINS - 1)
-#    ess = es[es[:time] < (i+1)*300][es[:time] >= i*300]
-#     ea = Array(ess)
-#    ebins[i] = ea[1:end .!= 3, 1:end .!= 3]
+#    ebins[i] = get_bin_edges(es, i)
 #end
 
 SA = zeros(Int, N_BINS)
@@ -254,35 +269,25 @@ RA = zeros(Int, N_BINS)
 ##########
 
 for i in 0:(N_BINS - 1)
-    # get bin edges
-    ess = es[es[:time] < (i+1)*300][es[:time] >= i*300]
-    ea = Array(ess)
-    eaf =  convert(Array{UInt32,2}, ea[1:end .!= 3, 1:end .!= 3])
-    
     # create temporal graph of current interactions
-    g = SimpleGraph{UInt32}()
-    add_vertices!(g,NV)
-    #add_graph_edges(g,oni,ebins[i])
-    add_graph_edges(g,oni,eaf)
-    #@info "# vs", convert(Int,nv(g))
-    #@info "# es", convert(Int,ne(g))
-    #@info "----"
+    bin_edges = get_bin_edges(UInt32,es,i)
+    g = get_temporal_graph(UInt32,NV,oni,bin_edges) 
 
-    if SAVE_ANIM
-    	# enum are 0-based!?
-    	# membership = [Int(vstats[v].status)+1 for v in 1:NV]
-    	membership = [Int(vstats[v].status) for v in 1:NV]
-    	# membership color
-    	nodefillc = VCOLOR[membership]
+    #if SAVE_ANIM
+    #	# enum are 0-based!?
+    #	# membership = [Int(vstats[v].status)+1 for v in 1:NV]
+    #	membership = [Int(vstats[v].status) for v in 1:NV]
+    #	# membership color
+    #	nodefillc = VCOLOR[membership]
 
-    	p = gplot(g_base, l_x, l_y, nodefillc=nodefillc)
-    	output = compose(p)
-    
-    	j = length(anim.frames) + 1
-    	tmpfilename = joinpath(anim.dir, @sprintf("%06d.png", j))
-    	Compose.draw(PNG(tmpfilename), output)
-    	push!(anim.frames, tmpfilename)
-    end
+    #	p = gplot(g_base, l_x, l_y, nodefillc=nodefillc)
+    #	output = compose(p)
+    #
+    #	j = length(anim.frames) + 1
+    #	tmpfilename = joinpath(anim.dir, @sprintf("%06d.png", j))
+    #	Compose.draw(PNG(tmpfilename), output)
+    #	push!(anim.frames, tmpfilename)
+    #end
     
     SA[i+1] = stat.ns
     EA[i+1] = stat.ne
@@ -291,11 +296,16 @@ for i in 0:(N_BINS - 1)
 
     # spread infection
     spread(g,i,vstats,stat,e_t=E_t,p_i=P_i,i_t=I_t)
+
+    # garbage collect
+    if i % 100 == 0
+    	GC.gc()
+    end
 end
 
-if SAVE_ANIM
-	gif(anim, "./plots/animation.gif", fps = 10)
-end
+#if SAVE_ANIM
+#	gif(anim, "./plots/animation.gif", fps = 10)
+#end
 
 Plots.plot(title = "SEIR Simulation", xlabel = "Time", ylabel = "# individuals")
 Plots.plot([SA EA IA RA], label = ["S" "E" "I" "R"], linecolor = VCOLOR)
