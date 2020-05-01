@@ -23,30 +23,43 @@ using Adjacently.graph
 # susceptible (S), exposed (E), infected (I), and resistant (R)
 @enum Status S=1 E=2 I=3 R=4
 
+# node state
 mutable struct VState
 	status::Status
 	time::UInt32
 end
 
+# current stats
 mutable struct Stat
 	ns::Int
 	ne::Int
 	ni::Int
 	nr::Int
-
 end
 
 function s2e(stat::Stat)
-	stat.ns = stat.ns - 1
-	stat.ne = stat.ne + 1
+	if stat.ns > 0
+		stat.ns = stat.ns - 1
+		stat.ne = stat.ne + 1
+	else
+		error("# susceptible is 0!")
+	end
 end
 function e2i(stat::Stat)
-	stat.ne = stat.ne - 1
-	stat.ni = stat.ni + 1
+	if stat.ne > 0
+		stat.ne = stat.ne - 1
+		stat.ni = stat.ni + 1
+	else
+		error("# exposed is 0!")
+	end
 end
 function i2r(stat::Stat)
-	stat.ni = stat.ni - 1
-	stat.nr = stat.nr + 1
+	if stat.ni > 0
+		stat.ni = stat.ni - 1
+		stat.nr = stat.nr + 1
+	else
+		error("# infected is 0!")
+	end
 end
 
 import Base.copy
@@ -118,6 +131,7 @@ function spread(g::AbstractGraph{T},time::Int,vstats::Dict{T,VState},stat::Stat;
 		if vstats[src(edge)].status == I::Status && vstats[dst(edge)].status == S::Status
 			if rand() < p_i
 				@info("Infecting new node: ", dst(edge))
+				# S -> E
 				vstats[dst(edge)].status = E::Status
 				vstats[dst(edge)].time = time
 				s2e(stat)
@@ -127,6 +141,7 @@ function spread(g::AbstractGraph{T},time::Int,vstats::Dict{T,VState},stat::Stat;
 		if vstats[dst(edge)].status == I::Status && vstats[src(edge)].status == S::Status
 			if rand() < p_i
 				@info("Infecting new node: ", src(edge))
+				# S -> E
 				vstats[src(edge)].status = E::Status
 				vstats[src(edge)].time = time
 				s2e(stat)
@@ -164,6 +179,8 @@ VCOLOR = [colorant"blue" colorant"orange" colorant"red" colorant"grey"]
 # save anim
 SAVE_ANIM = false
 
+N_BINS = 4000
+
 ##########
 # initializations
 ##########
@@ -199,6 +216,7 @@ val_pr_max, ind_pr_max = findmax(pr)
 for j in 1:10
 	vstats[convert(UInt32,j)].status = I::Status
 	s2e(stat)
+	e2i(stat)
 end
 
 # set spring layout
@@ -212,20 +230,19 @@ add_vertices!(g_base,NV)
 @info("loading bt-detected-internal")
 es = Pandas.read_csv("./data/bt-detected-internal.csv")
 
-#anim = Animation()
-
-N_BINS = 1000
-
-# load edge time bins
-ebins = Dict{Int,Array{UInt32,2}}()
-
-@info("loading time bin edges")
-for i in 0:(N_BINS - 1)
-    ess = es[es[:time] < (i+1)*300][es[:time] >= i*300]
-    ea = Array(ess)
-    eaf = ea[1:end .!= 3, 1:end .!= 3]
-    ebins[i] = eaf
+if SAVE_ANIM
+    anim = Animation()
 end
+
+## load edge time bins
+#ebins = Dict{Int,Array{UInt32,2}}()
+#
+#@info("loading time bin edges")
+#for i in 0:(N_BINS - 1)
+#    ess = es[es[:time] < (i+1)*300][es[:time] >= i*300]
+#     ea = Array(ess)
+#    ebins[i] = ea[1:end .!= 3, 1:end .!= 3]
+#end
 
 SA = zeros(Int, N_BINS)
 EA = zeros(Int, N_BINS)
@@ -236,31 +253,36 @@ RA = zeros(Int, N_BINS)
 # simulation
 ##########
 
-#for i in 1:8063
 for i in 0:(N_BINS - 1)
+    # get bin edges
+    ess = es[es[:time] < (i+1)*300][es[:time] >= i*300]
+    ea = Array(ess)
+    eaf =  convert(Array{UInt32,2}, ea[1:end .!= 3, 1:end .!= 3])
+    
     # create temporal graph of current interactions
     g = SimpleGraph{UInt32}()
     add_vertices!(g,NV)
-    add_graph_edges(g,oni,ebins[i])
+    #add_graph_edges(g,oni,ebins[i])
+    add_graph_edges(g,oni,eaf)
     #@info "# vs", convert(Int,nv(g))
     #@info "# es", convert(Int,ne(g))
     #@info "----"
 
-    #if SAVE_ANIM
-    #	# enum are 0-based!?
-    #	# membership = [Int(vstats[v].status)+1 for v in 1:NV]
-    #	membership = [Int(vstats[v].status) for v in 1:NV]
-    #	# membership color
-    #	nodefillc = VCOLOR[membership]
+    if SAVE_ANIM
+    	# enum are 0-based!?
+    	# membership = [Int(vstats[v].status)+1 for v in 1:NV]
+    	membership = [Int(vstats[v].status) for v in 1:NV]
+    	# membership color
+    	nodefillc = VCOLOR[membership]
 
-    #	p = gplot(g_base, l_x, l_y, nodefillc=nodefillc)
-    #	output = compose(p)
-    #
-    #	j = length(anim.frames) + 1
-    #	tmpfilename = joinpath(anim.dir, @sprintf("%06d.png", j))
-    #	Compose.draw(PNG(tmpfilename), output)
-    #	push!(anim.frames, tmpfilename)
-    #end
+    	p = gplot(g_base, l_x, l_y, nodefillc=nodefillc)
+    	output = compose(p)
+    
+    	j = length(anim.frames) + 1
+    	tmpfilename = joinpath(anim.dir, @sprintf("%06d.png", j))
+    	Compose.draw(PNG(tmpfilename), output)
+    	push!(anim.frames, tmpfilename)
+    end
     
     SA[i+1] = stat.ns
     EA[i+1] = stat.ne
@@ -271,13 +293,12 @@ for i in 0:(N_BINS - 1)
     spread(g,i,vstats,stat,e_t=E_t,p_i=P_i,i_t=I_t)
 end
 
-#if SAVE_ANIM
-#	gif(anim, "./plots/animation.gif", fps = 10)
-#end
+if SAVE_ANIM
+	gif(anim, "./plots/animation.gif", fps = 10)
+end
 
-gr()
 Plots.plot(title = "SEIR Simulation", xlabel = "Time", ylabel = "# individuals")
 Plots.plot([SA EA IA RA], label = ["S" "E" "I" "R"], linecolor = VCOLOR)
 
-GR.savefig("test.png")
+png("./plots/time-series.png")
 
